@@ -1,0 +1,149 @@
+pool:
+  vmImage: windows-latest
+  #Need to use the DevOps provided deployment instance, as we need to lay down the ground work which includes the ADO VMSS scaled solutions
+
+trigger:
+- main
+
+parameters:
+- name: armConnection
+  displayName: The Azure Devops Connection to use for deploying the resources
+  type: string
+  default: "AVD Squad Contributor"
+- name: armConnectionElevated
+  displayName: The Azure Devops Connection to use for deploying requires that required elevated privileges (e.g. UMI)
+  type: string
+  default: "UK Azure Squads ADO Elevated Production Sub"
+- name: subID
+  displayName: The subscription ID where the ImageBuilder resources are deployed
+  type: string
+  default: "8eef5bcc-4fc3-43bc-b817-048a708743c3"
+- name: localenv
+  displayName: Deploy under which environment name and tags?
+  type: string
+  default: "dev"
+  values:
+    - dev
+    - test
+    - uat
+    - prod
+- name: location
+  displayName: Azure region location e.g. uksouth, ukwest
+  type: string
+  default: "uksouth"
+- name: workloadName
+  displayName: No spaces string that is used to name the workload for resource naming and tagging
+  type: string
+  default: "imagebuilder"
+- name: workloadNameShort
+  displayName: An abbreviated version of the workload name (max 4 characters) for string length restricted resources e.g. VMs
+  type: string
+  default: "IB"
+- name: sequenceNumber
+  displayName: "The sequence number used as part of the resource naming convention e.g. 001.  Typically the default is fine"
+  type: string
+  default: "001"
+
+variables:
+- name: rgName #Resource group to deploy to - e.g. rg-imagebuilder-prod-uksouth-001
+  value: "rg-${{ lower(parameters.workloadName) }}-${{ lower(parameters.localenv) }}-${{ lower(parameters.location) }}-${{ lower(parameters.sequenceNumber) }}"
+- name: umiName #Name of the user managed identity - e.g. umi-imagebuilder-prod-uksouth-001
+  value: "umi-${{ lower(parameters.workloadName) }}-${{ lower(parameters.localenv) }}-${{ lower(parameters.location) }}-${{ lower(parameters.sequenceNumber) }}"
+- name: repoName #The name of the storage repo to create/use e.g. stibproduksouth001
+  value: "st${{ lower(parameters.workloadNameShort) }}${{ lower(parameters.localenv) }}${{ lower(parameters.location) }}${{ lower(parameters.sequenceNumber) }}"
+- name: acgName #Name of the compute gallery e.g.acg_imagebuilder_prod_uksouth_001
+  value: "acg_${{ lower(parameters.workloadName) }}_${{ lower(parameters.localenv) }}_${{ lower(parameters.location) }}_${{ lower(parameters.sequenceNumber) }}"
+
+
+jobs:
+- job:
+  displayName: "Build the Image Builder infrastructure"
+  steps:
+    #checkout the repo
+    - checkout: self
+      submodules: true
+
+    #Show the directory listing (visual confirm step)
+    - script: dir
+      displayName: "Repo Directory Listing"
+
+    #Check to make sure we have all the required resource providers
+    - task: AzurePowerShell@5
+      displayName: "Check Subscription Resource Providers"
+      inputs:
+        ConnectedServiceNameARM: ${{ parameters.armConnection }}
+        scriptType: filePath
+        scriptPath: $(Build.SourcesDirectory)\Scripts\CheckResourceProviders.ps1"
+        scriptArguments:
+          -subscriptionID ${{ parameters.subID }}
+        azurePowerShellVersion: latestVersion
+        pwsh: true
+    
+    #Check the variables
+    - task: PowerShell@2
+      displayName: 'ARM parameters check'
+      inputs: 
+        targetType: 'inline'
+        script: |
+          Write-Host "-localenv ${{ parameters.localenv }}"
+          Write-Host "-location ${{ parameters.location }}"
+          Write-Host "-workloadNameShort ${{ parameters.workloadNameShort }}"
+          Write-Host "-workloadName ${{ parameters.workloadName }}"
+          Write-Host "-sequenceNumber ${{ parameters.sequenceNumber }}"
+          Write-Host "-computeGalName $(acgName)"
+          Write-Host "-storageRepoName $(repoName)"
+
+    #Deploy the base components (e.g. repo and compute gallery) to the RG (and create RG if required)
+    - task: AzureResourceManagerTemplateDeployment@3
+      displayName: "Deploy ImageBuilder common components"
+      inputs:
+        deploymentScope: "Resource Group"
+        azureResourceManagerConnection: ${{ parameters.armConnection }}
+        subscriptionId: ${{ parameters.subID }}
+        resourceGroupName: $(rgName)
+        location: ${{ parameters.location }}
+        templateLocation: "Linked artifact"
+        csmFile: "./Bicep/common.bicep"
+        deploymentMode: "Incremental"
+        overrideParameters: >
+          -localenv "${{ parameters.localenv }}"
+          -location "${{ parameters.location }}"
+          -workloadNameShort "${{ parameters.workloadNameShort }}"
+          -workloadName "${{ parameters.workloadName }}"
+          -sequenceNumber "${{ parameters.sequenceNumber }}"
+          -computeGalName "$(acgName)"
+          -storageRepoName "$(repoName)"
+
+    #Create a user managed identity (UMI) for the image builder to use
+    - task: AzurePowerShell@5
+      displayName: "Create ImageBuilder UMI"
+      inputs:
+        ConnectedServiceNameARM: ${{ parameters.armConnection }}
+        scriptType: filePath
+        scriptPath: $(Build.SourcesDirectory)\Scripts\CreateUMI.ps1"
+        scriptArguments:
+          -umiRG $(rgName)
+          -subscriptionID ${{ parameters.subID }}
+          -umiLocation ${{ parameters.location }}
+          -umiName $(umiName)
+        azurePowerShellVersion: latestVersion
+        pwsh: true
+
+    #Assign the UMI to the appropriate components
+    - task: AzurePowerShell@5
+      displayName: "Assign ImageBuilder UMI"
+      inputs:
+        ConnectedServiceNameARM: ${{ parameters.armConnectionElevated }}
+        scriptType: filePath
+        scriptPath: $(Build.SourcesDirectory)\Scripts\AssignUMI.ps1"
+        scriptArguments:
+          -umiRG $(rgName)
+          -acgRG $(rgName)
+          -repoRG $(rgName)
+          -subscriptionID ${{ parameters.subID }}
+          -repoName $(repoName)
+          -acgName $(acgName)
+          -umiName $(umiName)
+        azurePowerShellVersion: latestVersion
+        pwsh: true
+
