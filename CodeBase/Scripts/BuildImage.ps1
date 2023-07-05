@@ -29,8 +29,15 @@ param (
     [Int]$ibTimeout = 120,
     [String]$ibVMSize = "Standard_D2s_v3",
     [int]$pollingTime = 60,
-    [Bool]$doBuildimage = $true
+    [Bool]$doBuildimage = $true,
+    [Bool]$runAsPipeline = $true,
+    [string]$imageBase = ".\Images"
 )
+
+if (-Not $runAsPipeline) {
+    Write-Host "Running Manually" -ForegroundColor Yellow
+    $imageBase = "..\Images"
+}
 
 #Install the AZ Imagebuilder module if it is not already installed
 Write-Output "Checking for Image Builder Powershell Module"
@@ -73,7 +80,7 @@ $imageTags = $rg.Tags
 Write-Output "Deploying the Image Definition in preparation for building"
 $defDeploy = $null
 
-$out = New-AzResourceGroupDeployment -Name "DeployImageResources-$imageName" -ResourceGroupName $imageRG -Verbose -TemplateFile "Images\$imageName\imagebuild.bicep" -ErrorVariable defDeploy -TemplateParameterObject @{
+$out = New-AzResourceGroupDeployment -Name "DeployImageResources-$imageName" -ResourceGroupName $imageRG -Verbose -TemplateFile "$imageBase\$imageName\imagebuild.bicep" -ErrorVariable defDeploy -TemplateParameterObject @{
     location=$location
     tags=$imageTags
     localenv=$localenv

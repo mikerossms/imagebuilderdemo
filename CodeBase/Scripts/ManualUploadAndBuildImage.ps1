@@ -49,12 +49,12 @@ if ($connectSubid -ne $subscriptionID) {
 }
 
 Write-Host "Cleaning up templates" -ForegroundColor Green
-&.\Scripts\CleanUpTemplates.ps1 -subscriptionID $subscriptionID -imageBuilderRG $imageBuilderRG -imageName $imageName
+&.\CleanUpTemplates.ps1 -subscriptionID $subscriptionID -imageBuilderRG $imageBuilderRG -imageName $imageName
 
 Write-Host "Uploading build scripts" -ForegroundColor Green
-&.\Scripts\UploadBuildScripts.ps1 -subscriptionID $subscriptionID -repoRG $repoRG -repoName $repoName -repoContainerScripts $repoContainerScripts -imageName $imageName
+&.\UploadBuildScripts.ps1 -subscriptionID $subscriptionID -repoRG $repoRG -repoName $repoName -repoContainerScripts $repoContainerScripts -imageName $imageName -runAsPipeline $false
 
 if ($runBuild) {
     Write-Host "Build Image" -ForegroundColor Green
-    &.\Scripts\BuildImage.ps1 -subscriptionID $subscriptionID -imageRG $imageBuilderRG -imageName $imageName -ibTimeout $ibTimeout -ibVMSize $ibVMSize -doBuildImage $runBuild
+    &.\BuildImage.ps1 -subscriptionID $subscriptionID -imageRG $imageBuilderRG -imageName $imageName -ibTimeout $ibTimeout -ibVMSize $ibVMSize -doBuildImage $runBuild -runAsPipeline $false
 }

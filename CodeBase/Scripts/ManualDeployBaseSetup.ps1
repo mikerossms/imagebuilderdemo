@@ -71,11 +71,11 @@ if ($deploy) {
 }
 
 Write-Host "Create Imagebuilder UMI" -ForegroundColor Green
-&.\Scripts\CreateUMI.ps1 -subscriptionID $subscriptionID -umiRG $imageBuilderRG -umiLocation $location -umiName $umiName
+&.\CreateUMI.ps1 -subscriptionID $subscriptionID -umiRG $imageBuilderRG -umiLocation $location -umiName $umiName
 
 
 Write-Host "Assign Imagebuilder UMI" -ForegroundColor Green
-&.\Scripts\AssignUMI.ps1 -subscriptionID $subscriptionID `
+&.\AssignUMI.ps1 -subscriptionID $subscriptionID `
     -umiRG $imageBuilderRG `
     -acgRG $imageBuilderRG `
     -repoRG $imageBuilderRG `

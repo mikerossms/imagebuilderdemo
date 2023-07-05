@@ -22,14 +22,16 @@ param (
     [String]$repoRG = "rg-imagebuilder-dev-uksouth-001",
     [String]$repoContainerScripts = "buildscripts",
     [String]$subscriptionID = "8eef5bcc-4fc3-43bc-b817-048a708743c3",
-    [Bool]$runAsPipeline = $true
+    [Bool]$runAsPipeline = $true,
+    [String]$localCodeBaseRoot = ".\CodeBase"
 )
 
-$imageDepScriptFolder = ".\CodeBase\Images\$imageName"
-$imageCommonScriptFolder = ".\CodeBase\Components\ImageBuilderCommonScripts"
+$imageDepScriptFolder = "$localCodeBaseRoot\Images\$imageName"
+$imageCommonScriptFolder = "$localCodeBaseRoot\Components\ImageBuilderCommonScripts"
 $imageBuildScriptsZipName = "buildscripts.zip"
 
 if (-Not $runAsPipeline) {
+    Write-Host "Running Manually" -ForegroundColor Yellow
     $imageDepScriptFolder = "..\Images\$imageName"
     $imageCommonScriptFolder = "..\Components\ImageBuilderCommonScripts"
 }
